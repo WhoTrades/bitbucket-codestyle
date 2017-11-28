@@ -4,16 +4,17 @@
  *
  * Ядро проекта, подгружает конфигурацию, создает объект логирования
  */
-namespace PhpCsStash;
+namespace PhpCsBitBucket;
 
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\BrowserConsoleHandler;
+use PhpCsBitBucket\Checker\Sequential;
 
 class Core
 {
-    /** @var StashApi */
-    protected $stash;
+    /** @var BitBucketApi */
+    protected $bitBucket;
 
     /** @var Logger */
     protected $log;
@@ -31,13 +32,13 @@ class Core
 
         $this->initLogger();
 
-        $stashConfig = $this->getConfigSection('stash');
-        $this->stash = new StashApi(
+        $bitBucketConfig = $this->getConfigSection('bitbucket');
+        $this->bitBucket = new BitBucketApi(
             $this->getLogger(),
-            $stashConfig['url'],
-            $stashConfig['username'],
-            $stashConfig['password'],
-            $stashConfig['timeout']
+            $bitBucketConfig['url'],
+            $bitBucketConfig['username'],
+            $bitBucketConfig['password'],
+            $bitBucketConfig['timeout']
         );
     }
 
@@ -56,7 +57,7 @@ class Core
 		
 		if (!empty($this->config['logging']['logToStdOut'])) {
 		    $this->log->pushHandler(
-			    new StreamHandler("php://stdout", $this->config['logging']['verbosityError'])
+			    new StreamHandler("php://stdout", $this->config['logging']['verbosityLog'])
 		    );
 		}
 
@@ -72,11 +73,11 @@ class Core
     }
 
     /**
-     * @return StashApi
+     * @return BitBucketApi
      */
-    public function getStash()
+    public function getBitBucket()
     {
-        return $this->stash;
+        return $this->bitBucket;
     }
 
     /**
@@ -116,7 +117,7 @@ class Core
     {
         $requestProcessor = new RequestProcessor(
             $this->getLogger(),
-            $this->getStash(),
+            $this->getBitBucket(),
             $this->createChecker()
         );
 
@@ -129,14 +130,31 @@ class Core
      */
     protected function createChecker()
     {
-        $type = $this->getConfigSection('core')['type'];
+        $list = explode(",", $this->getConfigSection('checkers')['list']);
+        $list = array_map('trim', $list);
 
-        if ($type == 'phpcs') {
-            return new Checker\PhpCs($this->log, $this->getConfigSection('phpcs'));
-        } elseif ($type == 'cpp') {
-            return new Checker\Cpp($this->log, $this->getConfigSection('cpp'));
+        if (count($list) == 1) {
+            return $this->createCheckerByName(reset($list));
         } else {
-            throw new Exception\Runtime("Unknown checker type");
+            $checkers = [];
+            foreach ($list as $name) {
+                $checkers[] = $this->createCheckerByName($name);
+            }
+
+            return new Sequential($checkers);
         }
+    }
+
+    /**
+     * @param string $name
+     * @return Checker\CheckerInterface
+     */
+    private function createCheckerByName(string $name)
+    {
+        $config = $this->getConfigSection($name);
+        $className = $config['className'];
+        $checker = new $className($this->log, $config);
+
+        return $checker;
     }
 }

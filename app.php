@@ -8,10 +8,10 @@
  */
 require_once('vendor/autoload.php');
 
-$core = new \PhpCsStash\Core(__DIR__."/configuration.ini");
+$core = new \PhpCsBitBucket\Core(__DIR__."/configuration.ini");
 
 if (empty($_SERVER['argv'][3])) {
-	die("Usage: php app.php <branch> <slug> <repo>");
+	echo "Usage: php app.php <branch> <slug> <repo>";
 	exit(1);
 }
 

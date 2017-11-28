@@ -8,7 +8,7 @@
  */
 require_once('vendor/autoload.php');
 
-$core = new \PhpCsStash\Core(__DIR__."/configuration.ini");
+$core = new \PhpCsBitBucket\Core(__DIR__."/configuration.ini");
 
 $branch = isset($_GET['branch']) ? $_GET['branch'] : null;
 $slug = isset($_GET['slug']) ? $_GET['slug'] : null;

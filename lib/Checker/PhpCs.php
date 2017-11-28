@@ -4,16 +4,27 @@
  *
  * Интерфейсы для проверки файлов разными спрособами
  */
-namespace PhpCsStash\Checker;
+namespace PhpCsBitBucket\Checker;
 
 use Monolog\Logger;
+use PHP_CodeSniffer\Config;
+use PHP_CodeSniffer\Files\DummyFile;
+use PHP_CodeSniffer\Files\FileList;
+use PHP_CodeSniffer\Ruleset;
+use PhpCsBitBucket\CheckerResult\CheckerResultItem;
+use PhpCsBitBucket\CheckerResult\CheckerResultItemInterface;
 
 class PhpCs implements CheckerInterface
 {
      /**
-     * @var \PHP_CodeSniffer
+     * @var Config
      */
-    private $phpcs;
+    private $phpcsConfig;
+
+     /**
+     * @var Ruleset
+     */
+    private $phpcsRuleset;
 
     /**
      * @var Logger
@@ -28,57 +39,61 @@ class PhpCs implements CheckerInterface
     {
         $this->log = $log;
 
-        if (!empty($config['installed_paths'])) {
-            $GLOBALS['PHP_CODESNIFFER_CONFIG_DATA'] = array (
-                'installed_paths' => str_replace(
-                    '%root%',
-                    dirname(__DIR__),
-                    $config['installed_paths']
-                ),
-            );
+        require_once(__DIR__ . '/../../vendor/squizlabs/php_codesniffer/autoload.php');
+        $this->phpcsConfig = new Config(['--encoding=' . $config['encoding']]);
+        $this->phpcsConfig->interactive = false;
+        $this->phpcsConfig->cache = false;
+        $this->phpcsConfig->standards = [$config['standard']];
 
-            $this->log->debug("installed_paths=".$GLOBALS['PHP_CODESNIFFER_CONFIG_DATA']['installed_paths']);
-        }
-
-        $this->phpcs = new \PHP_CodeSniffer(
-            $verbosity = 0,
-            $tabWidth = 0,
-            $config['encoding'],
-            $interactive = false
-        );
+        $this->phpcsRuleset = new Ruleset($this->phpcsConfig);
 
         $this->log->debug("PhpCs config", $config);
 
-        $this->phpcs->cli->setCommandLineValues([
-            '--report=json',
-            '--standard='.$config['standard'],
-        ]);
 
-        $this->phpcs->initStandard($config['standard']);
     }
 
     /**
      * @param string $filename
      * @param string $extension
-     * @param string $dir
      * @return bool
      */
-    public function shouldIgnoreFile($filename, $extension, $dir)
+    public function shouldIgnoreFile($filename, $extension)
     {
-        return $this->phpcs->shouldIgnoreFile($filename, "./");
+        $fileList = new FileList($this->phpcsConfig, $this->phpcsRuleset);
+
+        $dir = preg_replace('~[^/]*$~', '', $filename) ?: "./";
+        $file = preg_replace('~^.*/~', '', $filename);
+
+        $fileList->addFile($dir, $file);
+
+        return $fileList->valid() === false;
     }
 
     /**
      * @param string $filename
      * @param string $extension
      * @param string $fileContent
-     * @return array
+     * @return CheckerResultItemInterface[]
      */
     public function processFile($filename, $extension, $fileContent)
     {
-        $phpCsResult = $this->phpcs->processFile($filename, $fileContent);
-        $errors = $phpCsResult->getErrors();
+        $this->phpcsConfig->stdinPath = $filename;
+        $file = new DummyFile($fileContent, $this->phpcsRuleset, $this->phpcsConfig);
+        $file->process();
 
-        return $errors;
+        $errors = $file->getErrors();
+
+        $result = [];
+
+        foreach ($errors as $line => $list) {
+            foreach ($list as $column => $messages) {
+                foreach ($messages as $message) {
+                    $result[] = new CheckerResultItem($line, $message['message']);
+                }
+
+            }
+        }
+
+        return $result;
     }
 }

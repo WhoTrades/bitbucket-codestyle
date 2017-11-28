@@ -4,23 +4,24 @@
  *
  * Интерфейсы для проверки файлов разными спрособами
  */
-namespace PhpCsStash\Checker;
+namespace PhpCsBitBucket\Checker;
+
+use PhpCsBitBucket\CheckerResult\CheckerResultItemInterface;
 
 interface CheckerInterface
 {
     /**
      * @param string $filename
      * @param string $extension
-     * @param string $dir
      * @return bool
      */
-    public function shouldIgnoreFile($filename, $extension, $dir);
+    public function shouldIgnoreFile($filename, $extension);
     
     /**
      * @param string $filename
      * @param string $extension
      * @param string $fileContent
-     * @return array - key is line number of $fileContent, value - is array of errors at this line
+     * @return CheckerResultItemInterface[]
      */
     public function processFile($filename, $extension, $fileContent);
 }

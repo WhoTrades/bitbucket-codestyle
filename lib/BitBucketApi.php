@@ -2,21 +2,21 @@
 /**
  * @author Artem Naumenko
  *
- * Класс для интеграции с atlassian stash. Реализует базовую функциональность API
+ * Класс для интеграции с atlassian bitbucket. Реализует базовую функциональность API
  * @see https://developer.atlassian.com/static/rest/stash/3.11.3/stash-rest.html
  */
-namespace PhpCsStash;
+namespace PhpCsBitBucket;
 
-use PhpCsStash\Exception\StashFileInConflict;
+use PhpCsBitBucket\Exception\BitBucketFileInConflict;
 use GuzzleHttp\Client;
 use Monolog\Logger;
 use \GuzzleHttp\Exception\RequestException;
 
 /**
- * Class StashApi
- * @package PhpCsStash
+ * Class BitBucketApi
+ * @package PhpCsBitBucket
  */
-class StashApi
+class BitBucketApi
 {
     const HTTP_TIMEOUT = 90;
 
@@ -29,9 +29,9 @@ class StashApi
     private $username;
 
     /**
-     * StashApi constructor.
+     * BitBucketApi constructor.
      * @param Logger $logger   объект для журналирования
-     * @param string $url      ссылка на стеш со слешом на конце. Например: http://atlassian-stash.com/
+     * @param string $url      ссылка на bitbucket со слешом на конце. Например: http://atlassian-stash.com/
      * @param string $user     пользователь, от имени которого будут делаться запросы
      * @param string $password пароль пользователя
      */
@@ -41,15 +41,13 @@ class StashApi
         $this->logger = $logger;
 
         $config = [
-            'base_url' => "{$url}rest/api/1.0/",
-            'defaults' => [
-                'timeout' => $timeout,
-                'headers' => [
-                    'Content-type' => 'application/json',
-                ],
-                'allow_redirects' => true,
-                'auth' => [$user, $password],
+            'base_uri' => "{$url}rest/api/1.0/",
+            'timeout' => $timeout,
+            'headers' => [
+                'Content-type' => 'application/json',
             ],
+            'allow_redirects' => true,
+            'auth' => [$user, $password],
         ];
         $this->httpClient = new Client($config);
     }
@@ -87,7 +85,7 @@ class StashApi
                     foreach ($hunk['segments'] as $segment) {
                         foreach ($segment['lines'] as $line) {
                             if (!empty($line['conflictMarker'])) {
-                                throw new StashFileInConflict("File $filename is in conflict state");
+                                throw new BitBucketFileInConflict("File $filename is in conflict state");
                             }
 
                             $result[$line['destination']] = $line['line'];
@@ -294,18 +292,16 @@ class StashApi
         try {
             if (strtoupper($method) == 'GET') {
                 $this->logger->debug("Sending GET request to $url, query=" . json_encode($request));
-                $reply = $this->httpClient->get($url, ['query' => $request]);
+                $reply = $this->httpClient->request('GET', $url, ['query' => $request]);
             } else {
                 $this->logger->debug("Sending $method request to $url, body=" . json_encode($request));
-                $reply = $this->httpClient->send(
-                    $this->httpClient->createRequest($method, $url, ['body' => json_encode($request)])
-                );
+                $reply = $this->httpClient->request($method, $url, ['body' => json_encode($request)]);
             }
         } catch (RequestException $e) {
-            //Stash error: it can't send more then 1mb of json data. So just skip suck pull requests or files
+            //bitbucket error: it can't send more then 1mb of json data. So just skip suck pull requests or files
             $this->logger->debug("Request finished with error: " . $e->getMessage());
             if ($e->getMessage() == 'cURL error 56: Problem (3) in the Chunked-Encoded data') {
-                throw new Exception\StashJsonFailure($e->getMessage(), $e->getRequest(), $e->getResponse(), $e);
+                throw new Exception\BitBucketJsonFailure($e->getMessage(), $e->getRequest(), $e->getResponse(), $e);
             } else {
                 throw $e;
             }

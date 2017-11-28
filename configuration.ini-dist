@@ -1,4 +1,4 @@
-[stash]
+[bitbucket]
 ; базовая ссылка на ваш atlassian bitbacket со слешом вконце
 url = "https://bitbacket.org/"
 ; Имя пользователя, от которого будет производиться интеграция
@@ -8,19 +8,21 @@ password = "apiUserpassword"
 ; Максимальное время ожидания ответа bitbacket сервера. Эту настройку рекомендуется не менять
 httpTimeout = 90
 
-[core]
-;phpcs или cpp
-type=phpcs
+[checkers]
+; coma separated list of checkers
+list=phpcs,jslint
 
 [phpcs]
+className=PhpCsBitBucket\Checker\PhpCs
 ; Кодировка файлов в вашем проекте. Если у вас в проекте разные файлы имеют разную кодировку - я вам не завидую :)
 encoding=utf-8
 ; Стандарт кодирония. Этот аргумент передается phpcs в аргументе --standard
-standard='vendor/squizlabs/php_codesniffer/CodeSniffer/Standards/PSR2/ruleset.xml'
+standard='vendor/squizlabs/php_codesniffer/src/Standards/PSR2/ruleset.xml'
 ; Пути установки дополнительных стилей кодирования
 installed_paths=''
 
 [cpp]
+className=PhpCsBitBucket\Checker\Cpp
 ; Путь к cpplint
 cpplint=bin/cpplint.py
 ; Пути к исполняемому python. Должен быть версии 2.7
@@ -29,13 +31,3 @@ python27Executable=python
 tmpdir=tmp
 ; Максимальная длинна строчки
 lineLength=120
-
-[logging]
-; путь к папке логов относительно корня приложения
-dir=log
-; уровень вербозности error-лога
-verbosityError=ERROR
-; уровень вербозности info-лога
-verbosityLog=DEBUG
-; Выводить ли лог прямо в консоль
-logToStdOut=1

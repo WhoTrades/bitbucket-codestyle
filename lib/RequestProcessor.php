@@ -4,25 +4,26 @@
  *
  * Обработчик запросов на изменение веток
  */
-namespace PhpCsStash;
+namespace PhpCsBitBucket;
 
-use PhpCsStash\Checker\CheckerInterface;
-use PhpCsStash\Exception\StashJsonFailure;
-use PhpCsStash\Exception\StashFileInConflict;
+use PhpCsBitBucket\Checker\CheckerInterface;
+use PhpCsBitBucket\CheckerResult\CheckerResultItemInterface;
+use PhpCsBitBucket\Exception\BitBucketJsonFailure;
+use PhpCsBitBucket\Exception\BitBucketFileInConflict;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
 use Monolog\Logger;
 
 /**
  * Class RequestProcessor
- * @package PhpCsStash
+ * @package PhpCsBitBucket
  */
 class RequestProcessor
 {
     /**
-     * @var StashApi
+     * @var BitBucketApi
      */
-    private $stash;
+    private $bitBucket;
 
     /**
      * @var Logger
@@ -35,17 +36,17 @@ class RequestProcessor
     private $checker;
 
     /**
-     * @param StashApi           $stash
+     * @param BitBucketApi           $bucket
      * @param Logger             $log
      * @param CheckerInterface   $checker
      */
     public function __construct(
         Logger $log,
-        StashApi $stash,
+        BitBucketApi $bucket,
         CheckerInterface $checker
     ) {
         $this->log = $log;
-        $this->stash = $stash;
+        $this->bitBucket = $bucket;
         $this->checker = $checker;
     }
 
@@ -60,8 +61,7 @@ class RequestProcessor
     {
         $this->log->info("Processing request with slug=$slug, repo=$repo, ref=$ref");
 
-        $pullRequests = $this->stash->getPullRequestsByBranch($slug, $repo, $ref);
-
+        $pullRequests = $this->bitBucket->getPullRequestsByBranch($slug, $repo, $ref);
         $this->log->info("Found {$pullRequests['size']} pull requests");
         $result = [];
         foreach ($pullRequests['values'] as $pullRequest) {
@@ -80,12 +80,13 @@ class RequestProcessor
         $result = [];
 
         try {
-            if ($this->stash->getUserName() != $pullRequest['author']['user']['name']) {
-                $this->stash->addMeToPullRequestReviewers($slug, $repo, $pullRequest['id']);
+            if ($this->bitBucket->getUserName() != $pullRequest['author']['user']['name']) {
+                $this->bitBucket->addMeToPullRequestReviewers($slug, $repo, $pullRequest['id']);
             }
 
-            $changes = $this->stash->getPullRequestDiffs($slug, $repo, $pullRequest['id'], 0);
+            $changes = $this->bitBucket->getPullRequestDiffs($slug, $repo, $pullRequest['id'], 0);
 
+            $errors = [];
             foreach ($changes['diffs'] as $diff) {
 				// файл был удален, нечего проверять
 				if ($diff['destination'] === null) {
@@ -95,7 +96,7 @@ class RequestProcessor
                 $filename = $diff['destination']['toString'];
                 $errors = $this->getDiffErrors($slug, $repo, $diff, $filename, $pullRequest['id']);
                 $affectedLines = $this->getDiffAffectedLines($diff);
-                $comments = $this->getCommentsFilteredByAffectedLines($filename, $errors, $affectedLines);
+                $comments = $this->getCommentsFilteredByAffectedLines($errors, $affectedLines);
 
                 foreach ($comments as $line => $comment) {
                     $result[$filename][$line] = $comment;
@@ -108,35 +109,49 @@ class RequestProcessor
 
             $this->removeOutdatedRobotComments($slug, $repo, $pullRequest['id']);
 
-			$this->markPullRequestMark($slug, $repo, $pullRequest['id'], $result);
+			$this->markPullRequestMark($slug, $repo, $pullRequest['id'], $errors);
         } catch (ClientException $e) {
-            $this->log->critical("Error integration with stash: ".$e->getMessage(), [
+            $this->log->critical("Error integration with bitbucket: ".$e->getMessage(), [
                 'type' => 'client',
                 'reply' => (string) $e->getResponse()->getBody(),
                 'headers' => $e->getResponse()->getHeaders(),
             ]);
         } catch (ServerException $e) {
-            $this->log->critical("Error integration with stash: ".$e->getMessage(), [
+            $this->log->critical("Error integration with bitbucket: ".$e->getMessage(), [
                 'type' => 'server',
                 'reply' => (string) $e->getResponse()->getBody(),
                 'headers' => $e->getResponse()->getHeaders(),
             ]);
-        } catch (StashJsonFailure $e) {
+        } catch (BitBucketJsonFailure $e) {
             $this->log->error("Json failure at pull request #{$pullRequest['id']}: ".$e->getMessage());
         }
 
         return $result;
     }
-	
-	protected function markPullRequestMark($slug, $repo, $pullRequestId, $result)
+
+    /**
+     * @param string $slug
+     * @param string $repo
+     * @param int $pullRequestId
+     * @param CheckerResultItemInterface[] $errors
+     * @return bool
+     */
+	protected function markPullRequestMark(string $slug, string $repo, int $pullRequestId, array $errors)
 	{
-		if (!$result) {
-			$this->stash->approvePullRequest($slug, $repo, $pullRequestId);
-			$this->log->info("Approved pull request #$pullRequestId");
-		} else {
-			$this->stash->unapprovePullRequest($slug, $repo, $pullRequestId);
-			$this->log->info("Unapprove pull request #$pullRequestId");
-		}
+	    foreach ($errors as $error) {
+	        /** @var $error CheckerResultItemInterface  */
+	        if ($error->isError()) {
+                $this->bitBucket->unapprovePullRequest($slug, $repo, $pullRequestId);
+                $this->log->info("Unapprove pull request #$pullRequestId");
+
+                return false;
+            }
+        }
+
+        $this->bitBucket->approvePullRequest($slug, $repo, $pullRequestId);
+        $this->log->info("Approved pull request #$pullRequestId");
+
+        return true;
 	}
 
     protected function getDiffErrors($slug, $repo, $diff, $filename, $pullRequestId)
@@ -144,17 +159,17 @@ class RequestProcessor
         $extension = $diff['destination']['extension'] ?? null;
         $this->log->info("Processing file $filename");
 
-        if ($this->checker->shouldIgnoreFile($filename, $extension, "./")) {
+        if ($this->checker->shouldIgnoreFile($filename, $extension)) {
             $this->log->info("File is in ignore list, so no errors can be found");
             return [];
         }
 
         try {
-            $fileContent = $this->stash->getFileContent($slug, $repo, $pullRequestId, $filename);
-        } catch (StashFileInConflict $e) {
+            $fileContent = $this->bitBucket->getFileContent($slug, $repo, $pullRequestId, $filename);
+        } catch (BitBucketFileInConflict $e) {
             $this->log->error("File $filename at pull request #$pullRequestId os in conflict state, skip code style checking");
             return [];
-        } catch (StashJsonFailure $e) {
+        } catch (BitBucketJsonFailure $e) {
             $this->log->error("Can't get contents of $filename at pull request #$pullRequestId");
             return [];
         }
@@ -195,14 +210,17 @@ class RequestProcessor
 
     /**
      * @param string $filename
-     * @param array $errors
+     * @param CheckerResultItemInterface[] $errors
      * @param int[] $affectedLines - list of affected lines [12, 13, 144, 145, 146]
      * @return array list of comments by file line [ 12 => 'Error at line 12', 144 => 'Othr error at line 144']
      */
-    protected function getCommentsFilteredByAffectedLines($filename, $errors, $affectedLines)
+    protected function getCommentsFilteredByAffectedLines(array $errors, $affectedLines)
     {
         $comments = [];
-        foreach ($errors as $line => $data) {
+        foreach ($errors as $error) {
+            /** @var $error CheckerResultItemInterface */
+            $line = $error->getAffectedLine();
+
             if (!in_array($line, $affectedLines)) {
                 continue;
             }
@@ -211,11 +229,7 @@ class RequestProcessor
                 $comments[$line] = [];
             }
 
-            foreach ($data as $column => $errors) {
-                foreach ($errors as $error) {
-                    $comments[$line][] = "{$error['message']}\n";
-                }
-            }
+            $comments[$line][] = $error->getMessage() . "\n";
         }
 
         $comments = array_map(function ($val) {
@@ -227,7 +241,7 @@ class RequestProcessor
 
     protected function actualizePullRequestComments($slug, $repo, $pullRequestId, $filename, $comments)
     {
-        $existingComments = $this->stash->getPullRequestComments(
+        $existingComments = $this->bitBucket->getPullRequestComments(
             $slug,
             $repo,
             $pullRequestId,
@@ -238,7 +252,7 @@ class RequestProcessor
 
         foreach ($existingComments as $comment) {
             // filtering only robot comments
-            if ($comment['author']['name'] != $this->stash->getUserName()) {
+            if ($comment['author']['name'] != $this->bitBucket->getUserName()) {
                 continue;
             }
 
@@ -250,7 +264,7 @@ class RequestProcessor
                 ]);
 
                 if (empty($comment['comments'])) {
-                    $this->stash->deletePullRequestComment(
+                    $this->bitBucket->deletePullRequestComment(
                         $slug,
                         $repo,
                         $pullRequestId,
@@ -260,7 +274,7 @@ class RequestProcessor
                 } else {
                     //If there are replies to our comment - just strike through our message
                     //@see https://confluence.atlassian.com/display/STASH0310/Markdown+syntax+guide#Markdownsyntaxguide-Characterstyles
-                    $this->stash->updatePullRequestComment(
+                    $this->bitBucket->updatePullRequestComment(
                         $slug,
                         $repo,
                         $pullRequestId,
@@ -279,7 +293,7 @@ class RequestProcessor
                     'oldText' => $comment['text'],
                 ]);
 
-                $this->stash->updatePullRequestComment(
+                $this->bitBucket->updatePullRequestComment(
                     $slug,
                     $repo,
                     $pullRequestId,
@@ -299,7 +313,7 @@ class RequestProcessor
                 'file' => $comment,
                 'text' => $comment,
             ]);
-            $this->stash->addPullRequestComment(
+            $this->bitBucket->addPullRequestComment(
                 $slug,
                 $repo,
                 $pullRequestId,
@@ -329,7 +343,7 @@ class RequestProcessor
      */
     protected function removeOutdatedRobotComments($slug, $repo, $pullRequestId)
     {
-        $activities = $this->stash->getPullRequestActivities(
+        $activities = $this->bitBucket->getPullRequestActivities(
             $slug,
             $repo,
             $pullRequestId
@@ -349,7 +363,7 @@ class RequestProcessor
                 continue;
             }
 
-            if ($activity['user']['name'] != $this->stash->getUserName()) {
+            if ($activity['user']['name'] != $this->bitBucket->getUserName()) {
                 continue;
             }
 
@@ -359,7 +373,7 @@ class RequestProcessor
             }
 
             if (empty($activity['comment']['comments'])) {
-                $this->stash->deletePullRequestComment(
+                $this->bitBucket->deletePullRequestComment(
                     $slug,
                     $repo,
                     $pullRequestId,
@@ -370,7 +384,7 @@ class RequestProcessor
             } else {
                 //If there are replies to our comment - just strike through our message
                 //@see https://confluence.atlassian.com/display/STASH0310/Markdown+syntax+guide#Markdownsyntaxguide-Characterstyles
-                $this->stash->updatePullRequestComment(
+                $this->bitBucket->updatePullRequestComment(
                     $slug,
                     $repo,
                     $pullRequestId,

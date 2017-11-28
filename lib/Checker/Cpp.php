@@ -4,9 +4,10 @@
  *
  * Интерфейсы для проверки файлов разными спрособами
  */
-namespace PhpCsStash\Checker;
+namespace PhpCsBitBucket\Checker;
 
 use Monolog\Logger;
+use PhpCsBitBucket\CheckerResult\CheckerResultItem;
 
 class Cpp implements CheckerInterface
 {
@@ -51,10 +52,9 @@ class Cpp implements CheckerInterface
     /**
      * @param string $filename
      * @param string $extension
-     * @param string $dir
      * @return bool
      */
-    public function shouldIgnoreFile($filename, $extension, $dir)
+    public function shouldIgnoreFile($filename, $extension)
     {
         if ($extension != "cpp" && $extension != "h" && $extension != "hpp" && $extension != "proto") {
              return true;
@@ -81,13 +81,7 @@ class Cpp implements CheckerInterface
                 $line = intval(substr($value, $pos1 + 1, $pos2 - $pos1 - 1));
                 $message = substr($value, $pos2 + 3, $pos3 - $pos2 - 3);
 
-                if (!isset($result[$line])) {
-                    $result[$line] = array(1 => array(0 => array("message" => $message)));
-                }
-                else {
-                    $result[$line][1][] = array("message" => $message);
-                }
-
+                $result[] = new CheckerResultItem($line, $message, true);
             }
         }
 
