@@ -2,7 +2,7 @@
     "name": "whotrades/bitbucket-code-style",
     "type": "library",
     "author": "Artem Naumenko",
-    "description": "Integration between phpcs and atlassian stash",
+    "description": "Robot for integration code style checking at atlassian bitbucket (supports phpcs and cpplint)",
     "autoload": {
         "psr-4": {
             "PhpCsBitBucket\\": "lib/"
