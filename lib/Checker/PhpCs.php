@@ -40,16 +40,25 @@ class PhpCs implements CheckerInterface
         $this->log = $log;
 
         require_once(__DIR__ . '/../../vendor/squizlabs/php_codesniffer/autoload.php');
-        $this->phpcsConfig = new Config(['--encoding=' . $config['encoding']]);
-        $this->phpcsConfig->interactive = false;
-        $this->phpcsConfig->cache = false;
-        $this->phpcsConfig->standards = [$config['standard']];
+
+        $this->phpcsConfig = $this->createPhpCsConfig($config);
 
         $this->phpcsRuleset = new Ruleset($this->phpcsConfig);
 
         $this->log->debug("PhpCs config", $config);
 
 
+    }
+
+    protected function createPhpCsConfig(array $config)
+    {
+        $phpcsConfig = new Config(['--encoding=' . $config['encoding']]);
+        $phpcsConfig->interactive = false;
+        $phpcsConfig->cache = false;
+        $phpcsConfig->standards = [$config['standard']];
+        $phpcsConfig::setConfigData('installed_paths', $config['installed_paths'], true);
+
+        return $phpcsConfig;
     }
 
     /**
