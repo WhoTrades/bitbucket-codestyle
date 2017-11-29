@@ -188,7 +188,7 @@ class RequestProcessor
      */
     protected function getDiffAffectedLines($diff)
     {
-        $affectedLines = [];
+        $affectedLines = [0];
 
         if (!empty($diff['hunks'])) {
             foreach ($diff['hunks'] as $hunk) {

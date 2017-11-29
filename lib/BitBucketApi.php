@@ -208,13 +208,21 @@ class BitBucketApi
      */
     public function addPullRequestComment($slug, $repo, $pullRequestId, $filename, $line, $text)
     {
-        $anchor = [
-            "line" => $line,
-            "lineType" => "ADDED",
-            "fileType" => "TO",
-            'path' => $filename,
-            'srcPath' => $filename,
-        ];
+        if ($line) {
+            $anchor = [
+                "line" => $line,
+                "lineType" => "ADDED",
+                "fileType" => "TO",
+                'path' => $filename,
+                'srcPath' => $filename,
+            ];
+        } else {
+            $anchor = [
+                'path' => $filename,
+                'srcPath' => $filename,
+            ];
+        }
+
 
         return $this->sendRequest("projects/$slug/repos/$repo/pull-requests/$pullRequestId/comments", "POST", [
             'text' => $text,

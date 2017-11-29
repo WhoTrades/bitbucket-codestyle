@@ -25,7 +25,7 @@ class CheckerResultItem implements CheckerResultItemInterface
 
     /**
      * CheckerResultItem constructor.
-     * @param int $line
+     * @param int $line - line of error. zero - if general error at file (for example - moving file to invalid place)
      * @param string $message
      * @param bool $error
      */
