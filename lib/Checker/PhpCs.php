@@ -39,7 +39,7 @@ class PhpCs implements CheckerInterface
     {
         $this->log = $log;
 
-        require_once(__DIR__ . '/../../vendor/squizlabs/php_codesniffer/autoload.php');
+        require_once('vendor/squizlabs/php_codesniffer/autoload.php');
 
         $this->phpcsConfig = $this->createPhpCsConfig($config);
 
