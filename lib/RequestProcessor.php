@@ -98,9 +98,7 @@ class RequestProcessor
                 $affectedLines = $this->getDiffAffectedLines($diff);
                 $comments = $this->getCommentsFilteredByAffectedLines($errors, $affectedLines);
 
-                foreach ($comments as $line => $comment) {
-                    $result[$filename][$line] = $comment;
-                }
+                $result[$filename] = array_merge($result[$filename] ?? [], $errors);
 
                 $this->log->info("Summary errors count after filtration: " . count($comments));
 
