@@ -9,7 +9,6 @@ namespace PhpCsBitBucket\Checker;
 use Monolog\Logger;
 use PHP_CodeSniffer\Config;
 use PHP_CodeSniffer\Files\DummyFile;
-use PHP_CodeSniffer\Files\FileList;
 use PHP_CodeSniffer\Ruleset;
 use PhpCsBitBucket\CheckerResult\CheckerResultItem;
 use PhpCsBitBucket\CheckerResult\CheckerResultItemInterface;
@@ -33,7 +32,7 @@ class PhpCs implements CheckerInterface
 
     /**
      * @param Logger   $log
-     * @param array $phpcs - ['encoding' => '....', 'standard' => '...']
+     * @param array $config - ['encoding' => '....', 'standard' => '...']
      */
     public function __construct(Logger $log, array $config)
     {
@@ -46,10 +45,13 @@ class PhpCs implements CheckerInterface
         $this->phpcsRuleset = new Ruleset($this->phpcsConfig);
 
         $this->log->debug("PhpCs config", $config);
-
-
     }
 
+    /**
+     * @param array $config
+     *
+     * @return Config
+     */
     protected function createPhpCsConfig(array $config)
     {
         $phpcsConfig = new Config(['--encoding=' . $config['encoding']]);
@@ -64,24 +66,19 @@ class PhpCs implements CheckerInterface
     /**
      * @param string $filename
      * @param string $extension
+     *
      * @return bool
      */
     public function shouldIgnoreFile($filename, $extension)
     {
-        $fileList = new FileList($this->phpcsConfig, $this->phpcsRuleset);
-
-        $dir = preg_replace('~[^/]*$~', '', $filename) ?: "./";
-        $file = preg_replace('~^.*/~', '', $filename);
-
-        $fileList->addFile($dir, $file);
-
-        return $fileList->valid() === false;
+        return $extension !== 'php';
     }
 
     /**
      * @param string $filename
      * @param string $extension
      * @param string $fileContent
+     *
      * @return CheckerResultItemInterface[]
      */
     public function processFile($filename, $extension, $fileContent)
@@ -99,7 +96,6 @@ class PhpCs implements CheckerInterface
                 foreach ($messages as $message) {
                     $result[] = new CheckerResultItem($line, $message['message']);
                 }
-
             }
         }
 

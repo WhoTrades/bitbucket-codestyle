@@ -88,11 +88,11 @@ class RequestProcessor
 
             $errors = [];
             foreach ($changes['diffs'] as $diff) {
-				// файл был удален, нечего проверять
-				if ($diff['destination'] === null) {
-					$this->log->info("Skip processing {$diff['source']['toString']}, as it was removed");
-					continue;
-				}
+                // файл был удален, нечего проверять
+                if ($diff['destination'] === null) {
+                    $this->log->info("Skip processing {$diff['source']['toString']}, as it was removed");
+                    continue;
+                }
                 $filename = $diff['destination']['toString'];
                 $errors = $this->getDiffErrors($slug, $repo, $diff, $filename, $pullRequest['id']);
                 $affectedLines = $this->getDiffAffectedLines($diff);
@@ -107,7 +107,7 @@ class RequestProcessor
 
             $this->removeOutdatedRobotComments($slug, $repo, $pullRequest['id']);
 
-			$this->markPullRequestMark($slug, $repo, $pullRequest['id'], $errors);
+            $this->markPullRequestMark($slug, $repo, $pullRequest['id'], $result);
         } catch (ClientException $e) {
             $this->log->critical("Error integration with bitbucket: ".$e->getMessage(), [
                 'type' => 'client',
@@ -132,17 +132,20 @@ class RequestProcessor
      * @param string $repo
      * @param int $pullRequestId
      * @param CheckerResultItemInterface[] $errors
+     *
      * @return bool
      */
-	protected function markPullRequestMark(string $slug, string $repo, int $pullRequestId, array $errors)
-	{
-	    foreach ($errors as $error) {
-	        /** @var $error CheckerResultItemInterface  */
-	        if ($error->isError()) {
-                $this->bitBucket->unapprovePullRequest($slug, $repo, $pullRequestId);
-                $this->log->info("Unapprove pull request #$pullRequestId");
+    protected function markPullRequestMark(string $slug, string $repo, int $pullRequestId, array $errors)
+    {
+        foreach ($errors as $list) {
+            foreach ($list as $error) {
+                /** @var $error CheckerResultItemInterface */
+                if ($error->isError()) {
+                    $this->bitBucket->unapprovePullRequest($slug, $repo, $pullRequestId);
+                    $this->log->info("Unapprove pull request #$pullRequestId");
 
-                return false;
+                    return false;
+                }
             }
         }
 
@@ -150,7 +153,7 @@ class RequestProcessor
         $this->log->info("Approved pull request #$pullRequestId");
 
         return true;
-	}
+    }
 
     protected function getDiffErrors($slug, $repo, $diff, $filename, $pullRequestId)
     {
@@ -159,6 +162,7 @@ class RequestProcessor
 
         if ($this->checker->shouldIgnoreFile($filename, $extension)) {
             $this->log->info("File is in ignore list, so no errors can be found");
+
             return [];
         }
 
@@ -166,9 +170,11 @@ class RequestProcessor
             $fileContent = $this->bitBucket->getFileContent($slug, $repo, $pullRequestId, $filename);
         } catch (BitBucketFileInConflict $e) {
             $this->log->error("File $filename at pull request #$pullRequestId os in conflict state, skip code style checking");
+
             return [];
         } catch (BitBucketJsonFailure $e) {
             $this->log->error("Can't get contents of $filename at pull request #$pullRequestId");
+
             return [];
         }
 
