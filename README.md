@@ -7,7 +7,7 @@
 
 ## Результат работы phpcs-bitbucket
 Результатом работы приложение явлются комментарии в atlassian bitbucket о найденных ошибках в стилях кода
-![скриншот примера результата работы](https://raw.githubusercontent.com/WhoTrades/phpcs-bitbucket/master/doc/images/result.png)
+![скриншот примера результата работы](https://raw.githubusercontent.com/WhoTrades/bitbucket-codestyle/master/doc/images/result.png)
 
 ## Установка и настройка
 0. Клонировать репозиторий
