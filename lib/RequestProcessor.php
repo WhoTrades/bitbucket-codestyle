@@ -256,7 +256,8 @@ class RequestProcessor
                 continue;
             }
 
-            if (!isset($comments[$comment['anchor']['line']])) {
+            $line = $comment['anchor']['line'] ?? null;
+            if (!isset($comments[$line])) {
                 // Comment exist at remote and not exists now, so remove it
                 $this->log->info("Deleting comment #{$comment['id']}", [
                     'line' => $comment['anchor']['line'],
