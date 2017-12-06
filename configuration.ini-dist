@@ -10,10 +10,12 @@ httpTimeout = 90
 
 [checkers]
 ; coma separated list of checkers
-list=phpcs,jslint
+list=phpcs
 
 [phpcs]
 className=PhpCsBitBucket\Checker\PhpCs
+;Маска файлов, которые проверяются с помощью phpcs
+fileMaskRegex='~\.php$~'
 ; Кодировка файлов в вашем проекте. Если у вас в проекте разные файлы имеют разную кодировку - я вам не завидую :)
 encoding=utf-8
 ; Стандарт кодирония. Этот аргумент передается phpcs в аргументе --standard
@@ -31,3 +33,7 @@ python27Executable=python
 tmpdir=tmp
 ; Максимальная длинна строчки
 lineLength=120
+
+[logging]
+verbosityError=ERROR
+verbosityLog=DEBUG

@@ -15,6 +15,11 @@ use PhpCsBitBucket\CheckerResult\CheckerResultItemInterface;
 
 class PhpCs implements CheckerInterface
 {
+    /**
+     * @var array
+     */
+    private $config;
+
      /**
      * @var Config
      */
@@ -37,6 +42,7 @@ class PhpCs implements CheckerInterface
     public function __construct(Logger $log, array $config)
     {
         $this->log = $log;
+        $this->config = $config;
 
         require_once('vendor/squizlabs/php_codesniffer/autoload.php');
 
@@ -71,7 +77,11 @@ class PhpCs implements CheckerInterface
      */
     public function shouldIgnoreFile($filename, $extension)
     {
-        return $extension !== 'php';
+        if (preg_match($this->config['fileMaskRegex'], $filename)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

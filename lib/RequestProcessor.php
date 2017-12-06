@@ -96,9 +96,11 @@ class RequestProcessor
                 $filename = $diff['destination']['toString'];
                 $errors = $this->getDiffErrors($slug, $repo, $diff, $filename, $pullRequest['id']);
                 $affectedLines = $this->getDiffAffectedLines($diff);
-                $comments = $this->getCommentsFilteredByAffectedLines($errors, $affectedLines);
+                $filteredErrors = $this->filterErrorsByAffectedLines($errors, $affectedLines);
 
-                $result[$filename] = array_merge($result[$filename] ?? [], $errors);
+                $comments = $this->getComments($filteredErrors);
+
+                $result[$filename] = array_merge($result[$filename] ?? [], $filteredErrors);
 
                 $this->log->info("Summary errors count after filtration: " . count($comments));
 
@@ -109,19 +111,19 @@ class RequestProcessor
 
             $this->markPullRequestMark($slug, $repo, $pullRequest['id'], $result);
         } catch (ClientException $e) {
-            $this->log->critical("Error integration with bitbucket: ".$e->getMessage(), [
+            $this->log->critical("Error integration with bitbucket: " . $e->getMessage(), [
                 'type' => 'client',
                 'reply' => (string) $e->getResponse()->getBody(),
                 'headers' => $e->getResponse()->getHeaders(),
             ]);
         } catch (ServerException $e) {
-            $this->log->critical("Error integration with bitbucket: ".$e->getMessage(), [
+            $this->log->critical("Error integration with bitbucket: " . $e->getMessage(), [
                 'type' => 'server',
                 'reply' => (string) $e->getResponse()->getBody(),
                 'headers' => $e->getResponse()->getHeaders(),
             ]);
         } catch (BitBucketJsonFailure $e) {
-            $this->log->error("Json failure at pull request #{$pullRequest['id']}: ".$e->getMessage());
+            $this->log->error("Json failure at pull request #{$pullRequest['id']}: " . $e->getMessage());
         }
 
         return $result;
@@ -213,21 +215,33 @@ class RequestProcessor
     }
 
     /**
-     * @param string $filename
      * @param CheckerResultItemInterface[] $errors
      * @param int[] $affectedLines - list of affected lines [12, 13, 144, 145, 146]
+     *
+     * @return CheckerResultItemInterface[]
+     */
+    protected function filterErrorsByAffectedLines(array $errors, array $affectedLines)
+    {
+        $result = array_filter($errors, function (CheckerResultItemInterface $error) use ($affectedLines) {
+            $line = $error->getAffectedLine();
+
+            return in_array($line, $affectedLines);
+        });
+
+        return $result;
+    }
+
+    /**
+     * @param CheckerResultItemInterface[] $errors
+     *
      * @return array list of comments by file line [ 12 => 'Error at line 12', 144 => 'Othr error at line 144']
      */
-    protected function getCommentsFilteredByAffectedLines(array $errors, $affectedLines)
+    protected function getComments(array $errors)
     {
         $comments = [];
         foreach ($errors as $error) {
             /** @var $error CheckerResultItemInterface */
             $line = $error->getAffectedLine();
-
-            if (!in_array($line, $affectedLines)) {
-                continue;
-            }
 
             if (!isset($comments[$line])) {
                 $comments[$line] = [];
@@ -411,10 +425,10 @@ class RequestProcessor
     {
         $result = [];
         sort($numbers);
-        $prev = null;
+        $prev = -1;
         $first = null;
         foreach ($numbers as $val) {
-            if ($prev === null) {
+            if ($prev === -1) {
                 $first = $val;
                 $prev = $val;
                 continue;
