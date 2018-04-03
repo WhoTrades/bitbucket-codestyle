@@ -9,6 +9,7 @@ namespace PhpCsBitBucket\Checker;
 use Monolog\Logger;
 use PHP_CodeSniffer\Config;
 use PHP_CodeSniffer\Files\DummyFile;
+use PHP_CodeSniffer\Files\FileList;
 use PHP_CodeSniffer\Ruleset;
 use PhpCsBitBucket\CheckerResult\CheckerResultItem;
 use PhpCsBitBucket\CheckerResult\CheckerResultItemInterface;
@@ -77,11 +78,18 @@ class PhpCs implements CheckerInterface
      */
     public function shouldIgnoreFile($filename, $extension)
     {
-        if (preg_match($this->config['fileMaskRegex'], $filename)) {
-            return false;
+        if (!preg_match($this->config['fileMaskRegex'], $filename)) {
+            return true;
         }
 
-        return true;
+        $fileList = new FileList($this->phpcsConfig, $this->phpcsRuleset);
+        $fileList->addFile($filename);
+
+        if ($fileList->valid() === false) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
