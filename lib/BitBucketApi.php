@@ -7,6 +7,10 @@
  */
 namespace PhpCsBitBucket;
 
+use PhpCsBitBucket\BitBacket\Collection\Blame as BlameCollection;
+use PhpCsBitBucket\BitBacket\Item\Blame;
+use PhpCsBitBucket\BitBacket\Item\Commit;
+use PhpCsBitBucket\BitBacket\Item\Person;
 use PhpCsBitBucket\Exception\BitBucketFileInConflict;
 use GuzzleHttp\Client;
 use Monolog\Logger;
@@ -27,6 +31,16 @@ class BitBucketApi
     private $logger;
 
     private $username;
+
+    /**
+     * @var array
+     */
+    protected $blameCache = [];
+
+    /**
+     * @var array
+     */
+    protected $commitCache = [];
 
     /**
      * BitBucketApi constructor.
@@ -295,7 +309,110 @@ class BitBucketApi
         return $this->sendRequest("projects/$slug/repos/$repo/pull-requests", "GET", $query);
     }
 
-    private function sendRequest($url, $method, $request)
+    /**
+     * @param string $project
+     * @param string $repo
+     * @param string $path
+     * @param string $at // ag: the commit ID or ref to retrieve the content for
+     *
+     * @return BlameCollection
+     *
+     * @throws BitBacket\Exception\BlameDuplicateLineException
+     */
+    public function getFileBlame($project, $repo, $path, $at)
+    {
+        if (!isset($this->blameCache[$at][$path])) {
+            $this->logger->debug("Getting blame for {$path}");
+
+            $blameResponse = $this->sendRequest(
+                "projects/$project/repos/$repo/browse/$path",
+                'GET',
+                [
+                    'at' => $at,
+                    'blame' => true,
+                    'noContent' => true,
+                ]
+            );
+
+            $blameCollection = new BlameCollection($path);
+            foreach ($blameResponse as $blameLine) {
+                $blameCollection->addItem(
+                    new Blame(
+                        $blameLine['lineNumber'],
+                        $blameLine['spannedLines'],
+                        $blameLine['fileName'],
+                        $blameLine['commitId'],
+                        $blameLine['commitDisplayId'],
+                        new Person(
+                            $blameLine['author']['id'] ?? null,
+                            $blameLine['author']['name'],
+                            $blameLine['author']['emailAddress'],
+                            $blameLine['author']['displayName'] ?? null
+                        ),
+                        $blameLine['authorTimestamp'],
+                        new Person(
+                            $blameLine['committer']['id'] ?? null,
+                            $blameLine['committer']['name'],
+                            $blameLine['committer']['emailAddress'],
+                            $blameLine['committer']['displayName'] ?? null
+                        ),
+                        $blameLine['committerTimestamp']
+                    )
+                );
+            }
+
+            $this->blameCache[$at][$path] = $blameCollection;
+        }
+
+        return $this->blameCache[$at][$path];
+    }
+
+    /**
+     * @param string $project
+     * @param string $repo
+     * @param string $commitId
+     *
+     * @return Commit
+     */
+    public function getCommitById($project, $repo, $commitId)
+    {
+        if (!isset($this->commitCache[$commitId])) {
+            $commitArray = $this->sendRequest("projects/{$project}/repos/{$repo}/commits/{$commitId}", 'GET', []);
+
+            $this->commitCache[$commitId] = new Commit(
+                $commitArray['id'],
+                $commitArray['displayId'],
+                new Person(
+                    $commitArray['author']['id'] ?? null,
+                    $commitArray['author']['name'],
+                    $commitArray['author']['emailAddress'],
+                    $commitArray['author']['displayName'] ?? null
+                ),
+                $commitArray['authorTimestamp'],
+                new Person(
+                    $commitArray['committer']['id'] ?? null,
+                    $commitArray['committer']['name'],
+                    $commitArray['committer']['emailAddress'],
+                    $commitArray['committer']['displayName'] ?? null
+                ),
+                $commitArray['committerTimestamp'],
+                $commitArray['message']
+            );
+        }
+
+        return $this->commitCache[$commitId];
+    }
+
+    /**
+     * @param string $url
+     * @param string $method
+     * @param array $request
+     *
+     * @return array | bool
+     *
+     * @throws \Exception
+     */
+    private function sendRequest($url, $method, array $request)
     {
         try {
             if (strtoupper($method) == 'GET') {

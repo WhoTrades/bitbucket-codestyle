@@ -13,6 +13,9 @@ use PhpCsBitBucket\Exception\BitBucketFileInConflict;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
 use Monolog\Logger;
+use PhpCsBitBucket\BitBacket\Collection\Blame as BlameCollection;
+use PhpCsBitBucket\BitBacket\Exception\LineNotExistException;
+use PhpCsBitBucket\BitBacket\Exception\BlameDuplicateLineException;
 
 /**
  * Class RequestProcessor
@@ -86,7 +89,6 @@ class RequestProcessor
 
             $changes = $this->bitBucket->getPullRequestDiffs($slug, $repo, $pullRequest['id'], 0);
 
-            $errors = [];
             foreach ($changes['diffs'] as $diff) {
                 // файл был удален, нечего проверять
                 if ($diff['destination'] === null) {
@@ -94,13 +96,20 @@ class RequestProcessor
                     continue;
                 }
                 $filename = $diff['destination']['toString'];
-                $errors = $this->getDiffErrors($slug, $repo, $diff, $filename, $pullRequest['id']);
-                $affectedLines = $this->getDiffAffectedLines($diff);
-                $filteredErrors = $this->filterErrorsByAffectedLines($errors, $affectedLines);
+                if ($errors = $this->getDiffErrors($slug, $repo, $diff, $filename, $pullRequest['id'])) {
+                    $affectedLines = $this->getDiffAffectedLines($diff);
+                    try {
+                        $blameCollection = $this->bitBucket->getFileBlame($slug, $repo, $filename, $pullRequest['fromRef']['latestCommit']);
+                        $affectedLines = $this->filterOutAffectedLinesFormMergedCommits($slug, $repo, $affectedLines, $blameCollection, $pullRequest['fromRef']['id']);
+                    } catch (BlameDuplicateLineException $e) {
+                        $this->log->warning("Skip filtering out merged commits, reason={$e->getMessage()}");
+                    }
+                    $errors = $this->filterErrorsByAffectedLines($errors, $affectedLines);
+                }
 
-                $comments = $this->getComments($filteredErrors);
+                $comments = $this->getComments($errors);
 
-                $result[$filename] = array_merge($result[$filename] ?? [], $filteredErrors);
+                $result[$filename] = array_merge($result[$filename] ?? [], $errors);
 
                 $this->log->info("Summary errors count after filtration: " . count($comments));
 
@@ -212,6 +221,50 @@ class RequestProcessor
         $this->log->info("Affected lines: " . $this->visualizeNumbersToInterval(array_keys($affectedLines)));
 
         return $affectedLines;
+    }
+
+    /**
+     * @param string $slug
+     * @param string $repo
+     * @param array $affectedLines
+     * @param BlameCollection $blameCollection
+     *
+     * @return array
+     */
+    protected function filterOutAffectedLinesFormMergedCommits($slug, $repo, array $affectedLines, BlameCollection $blameCollection, $ref)
+    {
+        $branchTicket = substr($ref, strrpos($ref, '/') + 1);
+
+        $affectedLinesResult = [];
+        foreach ($affectedLines as $affectedLineNumber) {
+            // ag: Keep checking of whole file
+            if ($affectedLineNumber === 0) {
+                $affectedLinesResult[0] = 0;
+
+                continue;
+            }
+            try {
+                $blame = $blameCollection->getBlameByLineNumber($affectedLineNumber);
+            } catch (LineNotExistException $e) {
+                $this->log->warning("Keep not checked line because can't get blame for line {$affectedLineNumber}, reason={$e->getMessage()}");
+                $affectedLinesResult[] = $affectedLineNumber;
+
+                continue;
+            }
+
+            $commit = $this->bitBucket->getCommitById($slug, $repo, $blame->commitId);
+
+            // ag: Skip explicitly tagged lines of another tickets
+            if (preg_match('/\#([\w\-]+)$/', $commit->message, $match) && $match[1] !== $branchTicket) {
+                continue;
+            }
+
+            $affectedLinesResult[] = $affectedLineNumber;
+        }
+
+        $this->log->info("Affected lines after sort out merged commits: " . $this->visualizeNumbersToInterval(array_keys($affectedLinesResult)));
+
+        return $affectedLinesResult;
     }
 
     /**
