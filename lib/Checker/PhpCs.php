@@ -47,6 +47,20 @@ class PhpCs implements CheckerInterface
 
         require_once('vendor/squizlabs/php_codesniffer/autoload.php');
 
+        if (defined('PHP_CODESNIFFER_CBF') === false) {
+            define('PHP_CODESNIFFER_CBF', false);
+        }
+
+        // Saves passing the Config object into other objects that only need
+        // the verbostity flag for deubg output.
+        if (defined('PHP_CODESNIFFER_VERBOSITY') === false) {
+            define('PHP_CODESNIFFER_VERBOSITY', $this->config->verbosity);
+        }
+
+        // Create this class so it is autoloaded and sets up a bunch
+        // of PHP_CodeSniffer-specific token type constants.
+        $tokens = new \PHP_CodeSniffer\Util\Tokens();
+
         $this->phpcsConfig = $this->createPhpCsConfig($config);
 
         $this->phpcsRuleset = new Ruleset($this->phpcsConfig);
