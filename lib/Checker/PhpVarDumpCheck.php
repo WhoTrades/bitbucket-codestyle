@@ -29,11 +29,15 @@ class PhpVarDumpCheck implements CheckerInterface
      */
     private $tmpDir;
 
+    /**
+     * @param Logger $log
+     * @param array $config
+     */
     public function __construct(Logger $log, array $config)
     {
         $this->log = $log;
         $this->config = $config;
-        $this->tmpDir = $config['tmpdir'];
+        $this->tmpDir = $config['tmpdir'] ?? '/tmp';
     }
 
     /**
@@ -54,16 +58,31 @@ class PhpVarDumpCheck implements CheckerInterface
     }
 
     /**
-     * @return array
+     * @param string $filePath
+     *
+     * @return \JakubOnderka\PhpVarDumpCheck\Settings
+     *
+     * @throws \JakubOnderka\PhpVarDumpCheck\Exception\InvalidArgument
      */
-    private function getToolConfig()
+    private function getToolConfig(string $filePath)
     {
         $config = [0];
         if (isset($this->config['mode'])) {
             $config[] = $this->config['mode'];
         }
 
-        return $config;
+        $settings = \JakubOnderka\PhpVarDumpCheck\Settings::parseArguments(array_merge($config, [$filePath]));
+
+        if (isset($this->config['skipFunctions'])) {
+            $skipFunctions = explode(',', $this->config['skipFunctions']);
+            foreach ($skipFunctions as $function) {
+                if (($key = array_search($function, $settings->functionsToCheck)) !== false) {
+                    unset($settings->functionsToCheck[$key]);
+                }
+            }
+        }
+
+        return $settings;
     }
 
     /**
@@ -82,9 +101,8 @@ class PhpVarDumpCheck implements CheckerInterface
         file_put_contents($tempFile, $fileContent);
         $result = [];
         try {
-            $settings = \JakubOnderka\PhpVarDumpCheck\Settings::parseArguments(array_merge($this->getToolConfig(), [$tempFile]));
             $check = new \JakubOnderka\PhpVarDumpCheck\Manager();
-            $status = $check->checkFile($tempFile, $settings);
+            $status = $check->checkFile($tempFile, $this->getToolConfig($tempFile));
             foreach ($status as $item) {
                 $result[] = new CheckerResultItem($item->getLineNumber(), 'Forgotten dump found');
             }

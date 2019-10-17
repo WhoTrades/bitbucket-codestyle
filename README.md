@@ -23,3 +23,13 @@
 
 ## Интеграция с pull request
 Добавить webhook в atlassian stash с указанием ссылки на index.php из phpcs-bitbucket с аргументами index.php?branch=${refChange.refId}&repo=${project.key}&slug=${repository.slug}
+
+#Конфигурация
+
+Блок [phpvardumpcheck] поддерживает:
+
+```
+className='PhpCsBitBucket\Checker\PhpVarDumpCheck' ;Class to check
+mode='--symfony' ; mode (more - https://github.com/JakubOnderka/PHP-Var-Dump-Check#options-for-run)
+skipFunctions='var_export' ; functions, that will be skiped 
+```
