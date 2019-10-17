@@ -72,8 +72,8 @@ class PhpVarDumpCheck implements CheckerInterface
             $settings = \JakubOnderka\PhpVarDumpCheck\Settings::parseArguments([$this->config['mode'], "{$tempFile}"]);
             $check = new \JakubOnderka\PhpVarDumpCheck\Manager();
             $status = $check->checkFile($tempFile, $settings);
-            foreach ($status as $result) {
-                $result[] = new CheckerResultItem($result->getLineNumber(), 'Forgotten dump found');
+            foreach ($status as $item) {
+                $result[] = new CheckerResultItem($item->getLineNumber(), 'Forgotten dump found');
             }
         } catch (\Exception $e) {
             $this->log->addCritical($e->getMessage(), $e->getTrace());
