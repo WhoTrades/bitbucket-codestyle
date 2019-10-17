@@ -69,7 +69,7 @@ class PhpVarDumpCheck implements CheckerInterface
         file_put_contents($tempFile, $fileContent);
         $result = [];
         try {
-            $settings = \JakubOnderka\PhpVarDumpCheck\Settings::parseArguments([$this->config['mode'], "{$tempFile}"]);
+            $settings = \JakubOnderka\PhpVarDumpCheck\Settings::parseArguments([0, $this->config['mode'], "{$tempFile}"]);
             $check = new \JakubOnderka\PhpVarDumpCheck\Manager();
             $status = $check->checkFile($tempFile, $settings);
             foreach ($status as $item) {
