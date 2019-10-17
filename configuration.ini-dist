@@ -26,8 +26,6 @@ installed_paths=''
 [phpvardumpcheck]
 className='PhpCsBitBucket\Checker\PhpVarDumpCheck'
 mode='--symfony'
-exclude=""
-extensions=""
 
 [cpp]
 className=PhpCsBitBucket\Checker\Cpp

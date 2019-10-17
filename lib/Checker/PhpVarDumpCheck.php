@@ -54,6 +54,19 @@ class PhpVarDumpCheck implements CheckerInterface
     }
 
     /**
+     * @return array
+     */
+    private function getToolConfig()
+    {
+        $config = [0];
+        if (isset($this->config['mode'])) {
+            $config[] = $this->config['mode'];
+        }
+
+        return $config;
+    }
+
+    /**
      * @param string $filename
      * @param string $extension
      * @param string $fileContent
@@ -69,7 +82,7 @@ class PhpVarDumpCheck implements CheckerInterface
         file_put_contents($tempFile, $fileContent);
         $result = [];
         try {
-            $settings = \JakubOnderka\PhpVarDumpCheck\Settings::parseArguments([0, $this->config['mode'], "{$tempFile}"]);
+            $settings = \JakubOnderka\PhpVarDumpCheck\Settings::parseArguments(array_merge($this->getToolConfig(), [$tempFile]));
             $check = new \JakubOnderka\PhpVarDumpCheck\Manager();
             $status = $check->checkFile($tempFile, $settings);
             foreach ($status as $item) {
