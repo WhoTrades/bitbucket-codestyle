@@ -10,7 +10,7 @@ httpTimeout = 90
 
 [checkers]
 ; coma separated list of checkers
-list=phpcs
+list=phpcs,phpvardumpcheck
 
 [phpcs]
 className=PhpCsBitBucket\Checker\PhpCs
@@ -22,6 +22,10 @@ encoding=utf-8
 standard='vendor/squizlabs/php_codesniffer/src/Standards/PSR2/ruleset.xml'
 ; Пути установки дополнительных стилей кодирования
 installed_paths=''
+
+[phpvardumpcheck]
+className='PhpCsBitBucket\Checker\PhpVarDumpCheck'
+mode='--symfony'
 
 [cpp]
 className=PhpCsBitBucket\Checker\Cpp

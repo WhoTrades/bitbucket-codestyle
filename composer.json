@@ -1,7 +1,12 @@
 {
     "name": "whotrades/bitbucket-code-style",
     "type": "library",
-    "author": "Artem Naumenko",
+    "authors": [
+        {
+            "name": "Artem Naumenko",
+            "role": "Developer"
+        }
+    ],
     "description": "Robot for integration code style checking at atlassian bitbucket (supports phpcs and cpplint)",
     "autoload": {
         "psr-4": {
@@ -13,6 +18,7 @@
         "squizlabs/php_codesniffer": "3.*",
         "guzzlehttp/guzzle": "~6.3",
         "monolog/monolog": "~1.23",
-        "php": ">=7.0"
+        "php": ">=7.0",
+        "jakub-onderka/php-var-dump-check": "^0.3.0"
     }
 }
