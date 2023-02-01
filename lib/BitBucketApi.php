@@ -59,6 +59,7 @@ class BitBucketApi
             'timeout' => $timeout,
             'headers' => [
                 'Content-type' => 'application/json',
+                'Accept-Encoding' => 'gzip, deflate, br',
             ],
             'allow_redirects' => true,
             'auth' => [$user, $password],
